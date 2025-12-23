@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SSC Tracker Pro (4-Year Auto Plan)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: #eef2f5;
+  padding: 15px;
+}
+.container {
+  max-width: 520px;
+  margin: auto;
+  background: white;
+  padding: 15px;
+  border-radius: 10px;
+}
+h2, h3 {
+  text-align: center;
+}
+.task {
+  display: flex;
+  align-items: center;
+  margin: 8px 0;
+}
+input[type="checkbox"] {
+  margin-right: 10px;
+}
+input[type="text"] {
+  width: 100%;
+  padding: 6px;
+  margin: 5px 0 10px;
+}
+button {
+  width: 100%;
+  padding: 10px;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  margin-top: 10px;
+}
+.stats {
+  margin-top: 15px;
+  background: #f4f6f8;
+  padding: 10px;
+  border-radius: 5px;
+}
+canvas {
+  margin-top: 15px;
+}
+.auto-plan {
+  background: #f9fbff;
+  border-left: 4px solid #007bff;
+  padding: 10px;
+  margin-bottom: 15px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h2>📘 SSC Tracker Pro</h2>
+
+<div class="auto-plan">
+  <h3>📅 Today’s Auto Study Plan</h3>
+  <p id="todayPlan"></p>
+</div>
+
+<h3>✔ Mark Completion</h3>
+
+<div class="task">
+  <input type="checkbox" id="quant">
+  <label>Quant (15–20 min)</label>
+</div>
+
+<div class="task">
+  <input type="checkbox" id="reasoning">
+  <label>Reasoning (10 min)</label>
+</div>
+
+<div class="task">
+  <input type="checkbox" id="gs">
+  <label>GS / Current Affairs (10 min)</label>
+</div>
+
+<button onclick="saveProgress()">Save Progress</button>
+
+<div class="stats">
+  <p id="totalDays"></p>
+  <p id="streak"></p>
+  <p id="weekly"></p>
+</div>
+
+<canvas id="weeklyChart" height="200"></canvas>
+
+</div>
+
+<script>
+/* ===================== CONFIG ===================== */
+
+// 🔒 SET START DATE ONCE (change only this if needed)
+const START_DATE = new Date("2025-01-01");
+
+// Fixed books (never change)
+const BOOKS = {
+  quant: "R.S. Aggarwal – Quantitative Aptitude",
+  reasoning: "R.S. Aggarwal – Verbal & Non-Verbal Reasoning",
+  gs: "NCERT (Class 6–10)",
+  ca: "Monthly SSC Current Affairs PDF"
+};
+
+// Topic pools
+const QUANT_TOPICS = [
+  "Percentages","Ratio & Proportion","Averages","Profit & Loss",
+  "Simple Interest","Compound Interest","Time & Work",
+  "Pipes & Cisterns","Time, Speed & Distance",
+  "Mixture & Alligation","Mensuration (2D)",
+  "Data Interpretation","Number System"
+];
+
+const REASONING_TOPICS = [
+  "Analogy","Series","Coding–Decoding","Blood Relation",
+  "Direction Sense","Syllogism","Venn Diagram","Seating Arrangement"
+];
+
+const GS_TOPICS = [
+  "Polity (NCERT)","History (NCERT)",
+  "Geography (NCERT)","Economy (Basic)","Static GK"
+];
+
+// Study time
+const STUDY_TIME = {
+  quant: "15–20 min",
+  reasoning: "10 min",
+  gs: "10 min"
+};
+
+/* ===================== CORE LOGIC ===================== */
+
+const today = new Date().toDateString();
+
+function getData() {
+  return JSON.parse(localStorage.getItem("sscData")) || {};
+}
+
+function getStudyYear() {
+  const diffYears =
+    (new Date() - START_DATE) / (1000 * 60 * 60 * 24 * 365);
+  return Math.min(4, Math.floor(diffYears) + 1);
+}
+
+function getTodayPlan() {
+  const dayCount = Math.floor(
+    (new Date() - START_DATE) / (1000 * 60 * 60 * 24)
+  );
+
+  return {
+    year: getStudyYear(),
+    quant: QUANT_TOPICS[dayCount % QUANT_TOPICS.length],
+    reasoning: REASONING_TOPICS[dayCount % REASONING_TOPICS.length],
+    gs: GS_TOPICS[dayCount % GS_TOPICS.length]
+  };
+}
+
+/* ===================== UI ===================== */
+
+function showTodayPlan() {
+  const plan = getTodayPlan();
+  document.getElementById("todayPlan").innerHTML = `
+    <b>Study Year:</b> ${plan.year} / 4<br><br>
+
+    <b>Quant:</b> ${plan.quant}<br>
+    ⏱ ${STUDY_TIME.quant}<br>
+    📘 ${BOOKS.quant}<br><br>
+
+    <b>Reasoning:</b> ${plan.reasoning}<br>
+    ⏱ ${STUDY_TIME.reasoning}<br>
+    📘 ${BOOKS.reasoning}<br><br>
+
+    <b>GS:</b> ${plan.gs}<br>
+    ⏱ ${STUDY_TIME.gs}<br>
+    📘 ${BOOKS.gs}
+  `;
+}
+
+function saveProgress() {
+  let data = getData();
+  data[today] = {
+    quant: quant.checked,
+    reasoning: reasoning.checked,
+    gs: gs.checked
+  };
+  localStorage.setItem("sscData", JSON.stringify(data));
+  alert("Progress saved ✅");
+  loadStats();
+  loadWeeklyChart();
+}
+
+function loadToday() {
+  let data = getData()[today];
+  if (!data) return;
+  quant.checked = data.quant;
+  reasoning.checked = data.reasoning;
+  gs.checked = data.gs;
+}
+
+function loadStats() {
+  let data = getData();
+  let days = Object.keys(data);
+
+  let completedDays = days.filter(d =>
+    data[d].quant && data[d].reasoning && data[d].gs
+  ).length;
+
+  totalDays.innerText = `✅ Fully completed days: ${completedDays}`;
+
+  let streakCount = 0;
+  for (let i = days.length - 1; i >= 0; i--) {
+    let d = days[i];
+    if (data[d].quant && data[d].reasoning && data[d].gs) {
+      streakCount++;
+    } else break;
+  }
+  streak.innerText = `🔥 Current streak: ${streakCount} days`;
+  weekly.innerText = `📅 Target: 5+ days per week`;
+}
+
+function loadWeeklyChart() {
+  let data = getData();
+  let labels = [];
+  let values = [];
+
+  for (let i = 6; i >= 0; i--) {
+    let d = new Date();
+    d.setDate(d.getDate() - i);
+    let key = d.toDateString();
+    labels.push(d.toDateString().slice(0,10));
+
+    if (data[key]) {
+      let count = 0;
+      if (data[key].quant) count++;
+      if (data[key].reasoning) count++;
+      if (data[key].gs) count++;
+      values.push(count);
+    } else {
+      values.push(0);
+    }
+  }
+
+  new Chart(document.getElementById("weeklyChart"), {
+    type: "bar",
+    data: {
+      labels: labels,
+      datasets: [{
+        label: "Tasks completed (out of 3)",
+        data: values
+      }]
+    },
+    options: {
+      scales: { y: { beginAtZero: true, max: 3 } }
+    }
+  });
+}
+
+// Notification reminder (when page opens)
+if ("Notification" in window) {
+  Notification.requestPermission();
+  setTimeout(() => {
+    if (Notification.permission === "granted") {
+      new Notification("📢 SSC Reminder", {
+        body: "Time to follow today’s SSC auto study plan!"
+      });
+    }
+  }, 5000);
+}
+
+/* ===================== INIT ===================== */
+showTodayPlan();
+loadToday();
+loadStats();
+loadWeeklyChart();
+</script>
+
+</body>
+</html>
